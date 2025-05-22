@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Gerenciador de Macros com Firebase</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+  apiKey: "AIzaSyAWY84KuUy_pHfjTjVASq4c_XeCuj7xisY",
+  authDomain: "gerenciador-de-macros-thony.firebaseapp.com",
+  projectId: "gerenciador-de-macros-thony",
+  storageBucket: "gerenciador-de-macros-thony.firebasestorage.app",
+  messagingSenderId: "767759010256",
+  appId: "1:767759010256:web:18c7d42645e04da91f51d5"
+};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+  </script>
+  <style>
+    body { font-family: Arial; background: #f4f4f4; padding: 20px; }
+    .macro-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+    button { margin: 5px; padding: 5px 10px; }
+  </style>
+</head>
+<body>
+  <h1>Gerenciador de Macros (Firebase)</h1>
+
+  <form id="macroForm">
+    <input type="text" id="nome" placeholder="Nome" required><br>
+    <input type="text" id="categorias" placeholder="Categorias"><br>
+    <textarea id="conteudo" placeholder="Conteúdo da macro" rows="4" required></textarea><br>
+    <button type="submit">Salvar Macro</button>
+  </form>
+
+  <h2>Macros Salvas</h2>
+  <div id="macrosContainer"></div>
+
+  <script>
+    const form = document.getElementById("macroForm");
+    const macrosContainer = document.getElementById("macrosContainer");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nome = document.getElementById("nome").value.trim();
+      const conteudo = document.getElementById("conteudo").value.trim();
+      const categorias = document.getElementById("categorias").value.trim();
+      const data = new Date().toISOString();
+
+      await db.collection("macros").add({ nome, conteudo, categorias, data, uso: 0, favorito: false });
+      form.reset();
+      loadMacros();
+    });
+
+    async function loadMacros() {
+      macrosContainer.innerHTML = "";
+      const snapshot = await db.collection("macros").orderBy("data", "desc").get();
+      snapshot.forEach(doc => {
+        const macro = doc.data();
+        const div = document.createElement("div");
+        div.className = "macro-item";
+        div.innerHTML = `
+          <strong>${macro.nome}</strong><br>
+          <em>${macro.categorias}</em><br>
+          <pre>${macro.conteudo}</pre>
+          <small>Usado: ${macro.uso || 0}x</small><br>
+          <button onclick="copyMacro('${doc.id}')">Copiar</button>
+          <button onclick="editMacro('${doc.id}')">Editar</button>
+          <button onclick="deleteMacro('${doc.id}')">Excluir</button>
+          <button onclick="toggleFavorito('${doc.id}', ${macro.favorito})">Favoritar</button>
+          <button onclick="zerarUso('${doc.id}')">Zerar Uso</button>
+        `;
+        macrosContainer.appendChild(div);
+      });
+    }
+
+    async function copyMacro(id) {
+      const docRef = db.collection("macros").doc(id);
+      const doc = await docRef.get();
+      const macro = doc.data();
+      await navigator.clipboard.writeText(macro.conteudo);
+      await docRef.update({ uso: (macro.uso || 0) + 1 });
+      loadMacros();
+    }
+
+    async function editMacro(id) {
+      const doc = await db.collection("macros").doc(id).get();
+      const macro = doc.data();
+      document.getElementById("nome").value = macro.nome;
+      document.getElementById("conteudo").value = macro.conteudo;
+      document.getElementById("categorias").value = macro.categorias;
+      form.dataset.editingId = id;
+    }
+
+    async function deleteMacro(id) {
+      if (confirm("Deseja realmente excluir esta macro?")) {
+        await db.collection("macros").doc(id).delete();
+        loadMacros();
+      }
+    }
+
+    async function toggleFavorito(id, atual) {
+      await db.collection("macros").doc(id).update({ favorito: !atual });
+      loadMacros();
+    }
+
+    async function zerarUso(id) {
+      await db.collection("macros").doc(id).update({ uso: 0 });
+      loadMacros();
+    }
+
+    loadMacros();
+  </script>
+</body>
+</html>
